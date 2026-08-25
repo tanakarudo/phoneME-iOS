@@ -1,0 +1,43 @@
+name: Build phoneME iOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      - name: Build phoneME
+        run: |
+          xcodebuild \
+            -project phoneME.xcodeproj \
+            -scheme phoneME \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Package app
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -r phoneME-unsigned.ipa Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: phoneME-unsigned-ipa
+          path: phoneME-unsigned.ipa
