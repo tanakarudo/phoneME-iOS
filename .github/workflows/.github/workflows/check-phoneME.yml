@@ -1,0 +1,40 @@
+name: Check phoneME build environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Check Xcode
+        run: |
+          xcodebuild -version
+          xcode-select -p
+
+      - name: Check CMake
+        run: |
+          cmake --version
+
+      - name: Check phoneME files
+        run: |
+          echo "=== Root ==="
+          ls -la
+
+          echo "=== Core ==="
+          ls -la Core
+
+          echo "=== iOS build script ==="
+          ls -la Core/Tools/build-iphoneos.sh
+
+          echo "=== Xcode project ==="
+          ls -la phoneME.xcodeproj
+
+      - name: Check Xcode target
+        run: |
+          xcodebuild -list \
+            -project phoneME.xcodeproj
