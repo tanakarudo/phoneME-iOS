@@ -12,26 +12,82 @@ jobs:
     timeout-minutes: 60
 
     steps:
+      # --------------------------------------------------
+      # 1. Source
+      # --------------------------------------------------
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
-      - name: Show toolchain
+      # --------------------------------------------------
+      # 2. Toolchain
+      # --------------------------------------------------
+      - name: Show Xcode
         run: |
           xcodebuild -version
-          clang++ --version
-          cmake --version
-      - name: Verify phoneME project
+          xcode-select -p
+          swift --version
+          clang --version
+
+      # --------------------------------------------------
+      # 3. Install phoneME build dependencies
+      # --------------------------------------------------
+      - name: Install dependencies
         run: |
+          brew update
+          brew install ripgrep cmake ninja
+
+          echo "=== Versions ==="
+          rg --version
+          cmake --version
+          ninja --version
+
+      # --------------------------------------------------
+      # 4. Check repository
+      # --------------------------------------------------
+      - name: Check phoneME source
+        run: |
+          set -euxo pipefail
+
+          echo "=== Repository ==="
+          pwd
+
+          echo "=== Xcode project ==="
           test -f phoneME.xcodeproj/project.pbxproj
-          test -x Core/Tools/build-iphoneos.sh
+
+          echo "=== Core build script ==="
+          test -f Core/Tools/build-iphoneos.sh
+          ls -l Core/Tools/build-iphoneos.sh
+
+          echo "=== Project schemes ==="
           xcodebuild \
             -project phoneME.xcodeproj \
             -list
 
-
-      - name: Build phoneME for iOS
+      # --------------------------------------------------
+      # 5. Check required commands
+      # --------------------------------------------------
+      - name: Check build commands
         run: |
           set -euxo pipefail
+
+          command -v rg
+          command -v cmake
+          command -v ninja
+          command -v xcodebuild
+          command -v clang
+          command -v clang++
+
+      # --------------------------------------------------
+      # 6. Build phoneME
+      # --------------------------------------------------
+      - name: Build phoneME
+        run: |
+          set -euxo pipefail
+
+          rm -rf "$RUNNER_TEMP/DerivedData"
 
           xcodebuild \
             -project phoneME.xcodeproj \
@@ -44,34 +100,66 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY=""
 
-      - name: Find application
-        id: app
+      # --------------------------------------------------
+      # 7. Find .app
+      # --------------------------------------------------
+      - name: Find phoneME.app
+        id: find_app
         run: |
           set -euo pipefail
 
-          APP_PATH="$(find \
-            "$RUNNER_TEMP/DerivedData/Build/Products" \
-            -type d \
-            -name 'phoneME.app' \
-            -print -quit)"
+          APP_PATH="$(
+            find "$RUNNER_TEMP/DerivedData/Build/Products" \
+              -type d \
+              -name "phoneME.app" \
+              -print -quit
+          )"
 
           if [ -z "$APP_PATH" ]; then
-            echo "phoneME.app was not found."
+            echo "ERROR: phoneME.app not found."
+
+            echo "=== Available applications ==="
             find "$RUNNER_TEMP/DerivedData" \
               -type d \
-              -name '*.app' \
+              -name "*.app" \
               -print || true
+
             exit 1
           fi
 
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
-          echo "Found: $APP_PATH"
 
-      - name: Package unsigned IPA
+          echo "Found:"
+          echo "$APP_PATH"
+
+      # --------------------------------------------------
+      # 8. Inspect application
+      # --------------------------------------------------
+      - name: Inspect app
+        run: |
+          set -euxo pipefail
+
+          echo "=== App ==="
+          ls -lah "$APP_PATH"
+
+          echo "=== Info.plist ==="
+          /usr/libexec/PlistBuddy \
+            -c "Print :CFBundleIdentifier" \
+            "$APP_PATH/Info.plist" || true
+
+          echo "=== Architectures ==="
+          file "$APP_PATH/phoneME" || true
+          lipo -info "$APP_PATH/phoneME" || true
+
+      # --------------------------------------------------
+      # 9. Create unsigned IPA
+      # --------------------------------------------------
+      - name: Package IPA
         run: |
           set -euxo pipefail
 
           rm -rf Payload phoneME.ipa
+
           mkdir -p Payload
 
           cp -R "$APP_PATH" Payload/phoneME.app
@@ -81,8 +169,12 @@ jobs:
             phoneME.ipa \
             Payload
 
+          echo "=== IPA ==="
           ls -lh phoneME.ipa
 
+      # --------------------------------------------------
+      # 10. Upload IPA
+      # --------------------------------------------------
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
@@ -90,3 +182,15 @@ jobs:
           path: phoneME.ipa
           if-no-files-found: error
           retention-days: 7
+
+      # --------------------------------------------------
+      # 11. Upload .app if IPA packaging fails/debug needed
+      # --------------------------------------------------
+      - name: Upload app bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phoneME-App-Debug
+          path: ${{ env.APP_PATH }}
+          if-no-files-found: ignore
+          retention-days: 3
