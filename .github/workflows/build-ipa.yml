@@ -12,6 +12,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
+
       # ==========================================
       # 1. Checkout source
       # ==========================================
@@ -22,7 +23,7 @@ jobs:
           fetch-depth: 0
 
       # ==========================================
-      # 2. Xcode / toolchain information
+      # 2. Show Xcode information
       # ==========================================
       - name: Show Xcode
         run: |
@@ -35,7 +36,7 @@ jobs:
           clang++ --version
 
       # ==========================================
-      # 3. Install build dependencies
+      # 3. Install required build tools
       # ==========================================
       - name: Install dependencies
         run: |
@@ -43,66 +44,41 @@ jobs:
 
           brew update
 
-          brew install \
-            ripgrep \
-            cmake \
-            ninja
+          brew install ripgrep cmake ninja
 
-          echo "================================"
-          echo "Installed build tools"
-          echo "================================"
-
-          echo "rg:"
+          echo "===== ripgrep ====="
           rg --version
 
-          echo "cmake:"
+          echo "===== CMake ====="
           cmake --version
 
-          echo "ninja:"
+          echo "===== Ninja ====="
           ninja --version
 
       # ==========================================
-      # 4. Verify repository structure
+      # 4. Verify phoneME project
       # ==========================================
       - name: Verify phoneME source
         run: |
           set -e
 
-          echo "================================"
-          echo "Repository"
-          echo "================================"
-
+          echo "===== Current directory ====="
           pwd
+
+          echo "===== Files ====="
           ls -la
 
-          echo "================================"
-          echo "Xcode projects"
-          echo "================================"
-
+          echo "===== Xcode projects ====="
           find . \
             -maxdepth 4 \
             -name "*.xcodeproj" \
             -print
 
-          echo "================================"
-          echo "Core build scripts"
-          echo "================================"
+          echo "===== Checking project ====="
 
-          find . \
-            -maxdepth 5 \
-            -name "build-iphoneos.sh" \
-            -print
+          test -f phoneME.xcodeproj/project.pbxproj
 
-          echo "================================"
-          echo "Checking project"
-          echo "================================"
-
-          if [ ! -f "phoneME.xcodeproj/project.pbxproj" ]; then
-            echo "ERROR: phoneME.xcodeproj was not found."
-            exit 1
-          fi
-
-          echo "phoneME.xcodeproj OK"
+          echo "phoneME.xcodeproj found."
 
       # ==========================================
       # 5. Check required commands
@@ -111,7 +87,7 @@ jobs:
         run: |
           set -e
 
-          echo "Checking required commands..."
+          echo "Checking commands..."
 
           command -v rg
           command -v cmake
@@ -120,12 +96,12 @@ jobs:
           command -v clang
           command -v clang++
 
-          echo "All required commands are available."
+          echo "All required commands found."
 
       # ==========================================
-      # 6. Show Xcode targets / schemes
+      # 6. Show schemes
       # ==========================================
-      - name: List Xcode targets
+      - name: List Xcode schemes
         run: |
           set -e
 
@@ -144,7 +120,7 @@ jobs:
 
           xcodebuild \
             -project phoneME.xcodeproj \
-            -target phoneME \
+            -scheme phoneME \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
@@ -156,10 +132,9 @@ jobs:
       # ==========================================
       # 8. Find phoneME.app
       # ==========================================
-      - name: Find phoneME.app
-        id: find_app
+      - name: Find phoneME app
         run: |
-          set -euo pipefail
+          set -e
 
           echo "Searching for phoneME.app..."
 
@@ -174,7 +149,8 @@ jobs:
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: phoneME.app was not found."
 
-            echo "Available .app bundles:"
+            echo "===== Available .app files ====="
+
             find \
               "$RUNNER_TEMP/DerivedData" \
               -type d \
@@ -196,23 +172,17 @@ jobs:
         run: |
           set -e
 
-          echo "================================"
-          echo "Application"
-          echo "================================"
+          echo "===== App contents ====="
 
           ls -lah "$APP_PATH"
 
-          echo "================================"
-          echo "Bundle identifier"
-          echo "================================"
+          echo "===== Bundle identifier ====="
 
           /usr/libexec/PlistBuddy \
             -c "Print :CFBundleIdentifier" \
             "$APP_PATH/Info.plist" || true
 
-          echo "================================"
-          echo "Executable architecture"
-          echo "================================"
+          echo "===== Architecture ====="
 
           if [ -f "$APP_PATH/phoneME" ]; then
             file "$APP_PATH/phoneME"
@@ -220,9 +190,9 @@ jobs:
           fi
 
       # ==========================================
-      # 10. Package unsigned IPA
+      # 10. Create unsigned IPA
       # ==========================================
-      - name: Package unsigned IPA
+      - name: Package IPA
         run: |
           set -euxo pipefail
 
@@ -233,16 +203,13 @@ jobs:
 
           cp -R \
             "$APP_PATH" \
-            "Payload/phoneME.app"
+            Payload/phoneME.app
 
-          /usr/bin/zip \
-            -qry \
+          zip -qry \
             phoneME.ipa \
             Payload
 
-          echo "================================"
-          echo "IPA created"
-          echo "================================"
+          echo "===== IPA ====="
 
           ls -lh phoneME.ipa
 
@@ -253,16 +220,15 @@ jobs:
         run: |
           set -e
 
-          if [ ! -f "phoneME.ipa" ]; then
-            echo "ERROR: phoneME.ipa does not exist."
-            exit 1
-          fi
+          test -f phoneME.ipa
 
-          echo "IPA size:"
+          echo "IPA successfully created."
+
           ls -lh phoneME.ipa
 
-          echo "IPA contents:"
-          /usr/bin/unzip -l phoneME.ipa | head -50
+          echo "===== IPA contents ====="
+
+          unzip -l phoneME.ipa | head -50
 
       # ==========================================
       # 12. Upload IPA
