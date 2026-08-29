@@ -20,7 +20,6 @@ jobs:
           xcodebuild -version
           clang++ --version
           cmake --version
-
       - name: Verify phoneME project
         run: |
           test -f phoneME.xcodeproj/project.pbxproj
@@ -28,6 +27,7 @@ jobs:
           xcodebuild \
             -project phoneME.xcodeproj \
             -list
+
 
       - name: Build phoneME for iOS
         run: |
