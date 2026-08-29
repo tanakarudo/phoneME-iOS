@@ -24,7 +24,11 @@ jobs:
       - name: List schemes
         run: |
           xcodebuild -list -project phoneME.xcodeproj
-
+      - name: Install build dependencies
+        run: |
+          brew install ripgrep
+          rg --version
+          
       - name: Build
         run: |
           set -o pipefail
